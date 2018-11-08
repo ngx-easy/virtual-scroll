@@ -31,7 +31,7 @@ export class EasyVirtualScrollComponent implements OnInit, OnChanges, OnDestroy 
   @Input() buffer: number;
   @Input() debounceTime: number;
 
-  @Output() scroll: EventEmitter<ScrollEvent> = new EventEmitter<ScrollEvent>();
+  @Output() scrollEvent: EventEmitter<ScrollEvent> = new EventEmitter<ScrollEvent>();
 
   @ViewChild('transit') transit: ElementRef;
   @ViewChild('scroll') scrollElementRef: ElementRef;
@@ -43,24 +43,32 @@ export class EasyVirtualScrollComponent implements OnInit, OnChanges, OnDestroy 
   public rows: number;
   public topPadding: number;
 
+  private scrollLeft: number;
+  private xScrollSubscription$: Subscription;
   private yScrollSubscription$: Subscription;
 
   constructor(
-    private _ngZone: NgZone,
-    private _elementRef: ElementRef,
+    private ngZone: NgZone,
+    private elementRef: ElementRef,
   ) { }
 
   ngOnInit() {
-    this._ngZone.runOutsideAngular(() => {
-      const scrollSubscription$: Observable<Event> = fromEvent(this._elementRef.nativeElement, 'scroll');
-      if (this.debounceTime) {
-        this.yScrollSubscription$ = scrollSubscription$
-          .pipe(debounceTime(this.debounceTime))
-          .subscribe(() => this.refresh());
-      } else {
-        this.yScrollSubscription$ = scrollSubscription$
-          .subscribe(() => this.refresh());
-      }
+    this.ngZone.runOutsideAngular(() => {
+      const scrollSubscription$: Observable<Event> = fromEvent(this.elementRef.nativeElement, 'scroll');
+      this.xScrollSubscription$ = scrollSubscription$
+        .subscribe(() => {
+          const scrollLeft = this.elementRef.nativeElement.scrollLeft;
+          if (this.scrollLeft !== scrollLeft) {
+            this.scrollLeft = scrollLeft;
+            this.scrollEvent.emit({
+              type: ScrollType.Horizontal,
+              scrollLeft: this.scrollLeft
+            });
+          }
+        });
+      this.yScrollSubscription$ = scrollSubscription$
+        .pipe(debounceTime(this.debounceTime))
+        .subscribe(() => this.refresh());
     });
   }
 
@@ -70,6 +78,7 @@ export class EasyVirtualScrollComponent implements OnInit, OnChanges, OnDestroy 
   }
 
   ngOnDestroy() {
+    this.xScrollSubscription$.unsubscribe();
     this.yScrollSubscription$.unsubscribe();
   }
 
@@ -77,7 +86,7 @@ export class EasyVirtualScrollComponent implements OnInit, OnChanges, OnDestroy 
    * Gets the current Index of items that should be displayed based on the scroll position.
    */
   private getIndex(): ScrollIndex {
-    const el = this._elementRef.nativeElement;
+    const el = this.elementRef.nativeElement;
     const scrollHeight = this.rowHeight * this.size;
     const scrollTop = Math.max(0, Math.min(el.scrollTop, scrollHeight));
     const start = Math.max(0, Math.floor(scrollTop / scrollHeight * this.size));
@@ -97,33 +106,35 @@ export class EasyVirtualScrollComponent implements OnInit, OnChanges, OnDestroy 
   }
 
   public refresh() {
-    requestAnimationFrame(() => {
-      const index = this.getIndex();
-      if (!this.shouldUpdate(index)) {
-        return;
-      }
-
-      this.rows = index.end - index.start;
-
-      if (this.buffer == null) {
-        this.buffer = this.rows * 1;
-      }
-
-      this.topPadding = Math.max(0, ((this.rowHeight * index.start) - (this.rowHeight * this.buffer)));
-      index.start = Math.max(0, (index.start - this.buffer));
-      index.end = Math.min(this.size, (index.end + this.buffer));
-
-      if (this.previousIndex === undefined || index.start !== this.previousIndex.start || index.end !== this.previousIndex.end) {
-        if (!isNaN(index.start) && !isNaN(index.end)) {
-          this._ngZone.run(() => {
-            this.index = this.previousIndex = index;
-            this.scroll.emit({
-              type: ScrollType.Vertical,
-              index: index
-            });
-          });
+    this.ngZone.runOutsideAngular(() => {
+        const index = this.getIndex();
+        if (!this.shouldUpdate(index)) {
+          return;
         }
-      }
+
+        this.rows = index.end - index.start;
+
+        if (this.buffer == null) {
+          this.buffer = this.rows * 1;
+        }
+
+        this.topPadding = Math.max(0, ((this.rowHeight * index.start) - (this.rowHeight * this.buffer)));
+        index.start = Math.max(0, (index.start - this.buffer));
+        index.end = Math.min(this.size, (index.end + this.buffer));
+
+        if (this.previousIndex === undefined || index.start !== this.previousIndex.start || index.end !== this.previousIndex.end) {
+          if (!isNaN(index.start) && !isNaN(index.end)) {
+            requestAnimationFrame(() => {
+              this.ngZone.run(() => {
+                this.index = this.previousIndex = index;
+                this.scrollEvent.emit({
+                  type: ScrollType.Vertical,
+                  index: index
+                });
+              });
+            });
+          }
+        }
     });
   }
 }
