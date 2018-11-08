@@ -107,6 +107,7 @@ export class EasyVirtualScrollComponent implements OnInit, OnChanges, OnDestroy 
 
   public refresh() {
     this.ngZone.runOutsideAngular(() => {
+      requestAnimationFrame(() => {
         const index = this.getIndex();
         if (!this.shouldUpdate(index)) {
           return;
@@ -124,17 +125,16 @@ export class EasyVirtualScrollComponent implements OnInit, OnChanges, OnDestroy 
 
         if (this.previousIndex === undefined || index.start !== this.previousIndex.start || index.end !== this.previousIndex.end) {
           if (!isNaN(index.start) && !isNaN(index.end)) {
-            requestAnimationFrame(() => {
-              this.ngZone.run(() => {
-                this.index = this.previousIndex = index;
-                this.scrollEvent.emit({
-                  type: ScrollType.Vertical,
-                  index: index
-                });
+            this.ngZone.run(() => {
+              this.index = this.previousIndex = index;
+              this.scrollEvent.emit({
+                type: ScrollType.Vertical,
+                index: index
               });
             });
           }
         }
+      });
     });
   }
 }

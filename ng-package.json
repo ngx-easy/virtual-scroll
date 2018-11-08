@@ -2,6 +2,9 @@
   "$schema": "../../node_modules/ng-packagr/ng-package.schema.json",
   "dest": "../../dist/virtual-scroll",
   "deleteDestPath": true,
+  "whitelistedNonPeerDependencies": [
+    "ngx-device-detector"
+  ],
   "lib": {
     "entryFile": "src/public_api.ts"
   }
